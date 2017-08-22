@@ -399,248 +399,248 @@ Mat Bilateral_Filter(const Mat &src, const int filter_size, const double sigma_S
 	return dst;
 }
 
-//
-// Mat Fast_Bilateral_Filter(const Mat &src, const int filter_size, const double sigma_S, const double sigma_R){
-// 	Mat channels[3], _double_src;
-//
-// 	src.convertTo(_double_src, CV_64FC3);
-// 	split(_double_src, channels);  // Split src into B, G, R channels with type CV_64FC1 each
-//
-// 	Mat dst_tmp, dst;
-// 	dst_tmp.create(src.rows, src.cols, CV_64FC3);
-//
-// 	_fast_bilateral_impl(channels[0], channels[1], channels[2], dst_tmp, filter_size, sigma_S, sigma_R);
-//
-// 	dst.create(src.rows, src.cols, CV_64FC3);
-// 	dst_tmp.convertTo(dst, src.type());
-//
-// 	return dst;
-// }
-//
-//
-// void _fast_bilateral_impl(const Mat &B, const Mat &G ,const Mat &R, Mat &dst, const int filter_size, const double sigma_S, const double sigma_R){
-// 	const int diameter = filter_size / 2;
-// 	int kernel[filter_size], tmp[filter_size], total;
-//
-// 	for(int i = 0; i < filter_size; i++){
-// 		if (i < 2){
-// 			kernel[i] = 1;
-// 		} else {
-// 			for (int n = 0; n<=i; n++)
-// 				if (n == 0 || n == i) tmp[n] = 1;
-// 				else tmp[n] = kernel[n-1] + kernel[n];
-// 			for (int n = 0; n<=i; n++)
-// 				kernel[n] = tmp[n];
-// 		}
-// 	}
-//
-// 	for(int i = 0; i < filter_size; i++)
-// 		total += kernel[i];
-//
-// 	Mat tmp_B = Mat(B.size(), CV_64FC1);
-// 	Mat tmp_G = Mat(G.size(), CV_64FC1);
-// 	Mat tmp_R = Mat(R.size(), CV_64FC1);
-//
-// 	double b_min, b_max;
-// 	double g_min, g_max;
-// 	double r_min, r_max;
-//
-// 	minMaxLoc(B, &b_min, &b_max);
-// 	minMaxLoc(G, &g_min, &g_max);
-// 	minMaxLoc(R, &r_min, &r_max);
-//
-// 	const int padding_xy = 2, padding_z = 2, height = B.rows, width = B.cols;
-// 	const int downsample_height = (int)floor((height - 1) / sigma_S) + 1 + 2 * padding_xy;
-// 	const int downsample_width = (int)floor((width - 1) / sigma_S) + 1 + 2 * padding_xy;
-// 	const int downsample_depth_b = (int)floor((b_max - b_min) / sigma_R) + 1 + 2 * padding_z;
-// 	const int downsample_depth_g = (int)floor((g_max - g_min) / sigma_R) + 1 + 2 * padding_z;
-// 	const int downsample_depth_r = (int)floor((r_max - r_min) / sigma_R) + 1 + 2 * padding_z;
-//
-// 	cout << downsample_height << " " << downsample_width << " " << downsample_depth_b << " " << downsample_depth_g << " " << downsample_depth_r << endl;
-//
-// 	int data_size_b[] = {downsample_height, downsample_width, downsample_depth_b};
-// 	int data_size_g[] = {downsample_height, downsample_width, downsample_depth_g};
-// 	int data_size_r[] = {downsample_height, downsample_width, downsample_depth_r};
-//
-// 	Mat grid_b(3, data_size_b, CV_64FC2);  // (i, j, range) => 2 channels (wi, w)
-// 	Mat grid_g(3, data_size_g, CV_64FC2);
-// 	Mat grid_r(3, data_size_r, CV_64FC2);
-//
-// 	grid_b.setTo(0);
-// 	grid_g.setTo(0);
-// 	grid_r.setTo(0);
-//
-// 	// Step 1: Downsampling - Compute the grid location
-// 	for (int i = 0; i < height; i++){
-// 		for (int j = 0; j < width ; j++){
-// 			// Compute grid coordinate
-// 			const int di = (int)round((double)i / sigma_S);
-// 			const int dj = (int)round((double)j / sigma_S);
-//             const int dz_b = (int)round((B.at<double>(i,j) - b_min) / sigma_R);
-// 			const int dz_g = (int)round((G.at<double>(i,j) - g_min) / sigma_R);
-// 			const int dz_r = (int)round((R.at<double>(i,j) - r_min) / sigma_R);
-//
-// 			// Retrieve the grid value
-//             Vec2d v_b = grid_b.at<Vec2d>(di, dj, dz_b);
-// 			Vec2d v_g = grid_g.at<Vec2d>(di, dj, dz_g);
-// 			Vec2d v_r = grid_r.at<Vec2d>(di, dj, dz_r);
-//
-// 			// Updating the downsampled S x R space    => (w * i, w)
-//             v_b[0] += B.at<double>(i,j);	v_b[1] += 1.0;
-// 			v_g[0] += G.at<double>(i,j);	v_g[1] += 1.0;
-// 			v_r[0] += R.at<double>(i,j);	v_r[1] += 1.0;
-//
-// 			grid_b.at<Vec2d>(di, dj, dz_b) = v_b;
-// 			grid_g.at<Vec2d>(di, dj, dz_g) = v_g;
-// 			grid_r.at<Vec2d>(di, dj, dz_r) = v_r;
-// 		}
-// 	}
-//
-// 	// Step 2: Convolution
-// 	Mat buffer_b(3, data_size_b, CV_64FC2);
-// 	Mat buffer_g(3, data_size_g, CV_64FC2);
-// 	Mat buffer_r(3, data_size_r, CV_64FC2);
-// 	buffer_b.setTo(0);
-// 	buffer_g.setTo(0);
-// 	buffer_r.setTo(0);
-//
-// 	int offset[3];
-//     offset[0] = &(grid_b.at<Vec2d>(1,0,0)) - &(grid_b.at<Vec2d>(0,0,0));
-//     offset[1] = &(grid_b.at<Vec2d>(0,1,0)) - &(grid_b.at<Vec2d>(0,0,0));
-//     offset[2] = &(grid_b.at<Vec2d>(0,0,1)) - &(grid_b.at<Vec2d>(0,0,0));
-//
-// 	for (int d = 0; d < 3; d++){  	// For x, y, depth direction
-// 		for (int ittr = 0; ittr < 2; ittr++){
-// 			// SWAP:  Old_Value <=> New_Value
-// 			swap(grid_b, buffer_b);
-// 			swap(grid_g, buffer_g);
-// 			swap(grid_r, buffer_r);
-//
-// 			for (int i = 0; i < downsample_height - 0; i++){
-// 				for (int j = 0; j < downsample_width - 0; j++){
-// 					Vec2d *grid_ptr_b = &(grid_b.at<Vec2d>(i,j,diameter));
-// 					Vec2d *grid_ptr_g = &(grid_g.at<Vec2d>(i,j,diameter));
-// 					Vec2d *grid_ptr_r = &(grid_r.at<Vec2d>(i,j,diameter));
-//
-// 	                Vec2d *buffer_ptr_b = &(buffer_b.at<Vec2d>(i,j,diameter));
-// 					Vec2d *buffer_ptr_g = &(buffer_g.at<Vec2d>(i,j,diameter));
-// 					Vec2d *buffer_ptr_r = &(buffer_r.at<Vec2d>(i,j,diameter));
-//
-// 					for (int z = diameter; z < downsample_depth_b - diameter ; z++, buffer_ptr_b++, grid_ptr_b++){
-// 						for (int h = -diameter; h < -diameter + filter_size; h++)
-// 							*grid_ptr_b += *(buffer_ptr_b + h * offset[d]) * kernel[h + diameter];
-// 						*grid_ptr_b /= total;
-// 					}
-//
-// 					for (int z = diameter; z < downsample_depth_g - diameter; z++, buffer_ptr_g++, grid_ptr_g++){
-// 						for (int h = -diameter; h < -diameter + filter_size; h++)
-// 							*grid_ptr_g += *(buffer_ptr_g + h * offset[d]) * kernel[h + diameter];
-// 						*grid_ptr_g /= total;
-// 					}
-//
-// 					for (int z = diameter; z < downsample_depth_r - diameter ; z++, buffer_ptr_r++, grid_ptr_r++){
-// 						for (int h = -diameter; h < -diameter + filter_size; h++)
-// 							*grid_ptr_r += *(buffer_ptr_r + h * offset[d]) * kernel[h + diameter];
-// 						*grid_ptr_r /= total;
-// 					}
-// 				}
-// 			}
-//
-// 		}
-// 		// buffer_b.setTo(0);
-// 		// buffer_g.setTo(0);
-// 		// buffer_r.setTo(0);
-// 	}
-//
-// 	// Step 3: Upsampling
-// 	for ( MatIterator_<Vec2d> d = grid_b.begin<Vec2d>(); d != grid_b.end<Vec2d>(); d++){
-// 		(*d)[0] /= (*d)[1] != 0 ? (*d)[1] : 1;
-// 	}
-//
-// 	for ( MatIterator_<Vec2d> d = grid_g.begin<Vec2d>(); d != grid_g.end<Vec2d>(); d++){
-// 		(*d)[0] /= (*d)[1] != 0 ? (*d)[1] : 1;
-// 	}
-//
-// 	for ( MatIterator_<Vec2d> d = grid_r.begin<Vec2d>(); d != grid_r.end<Vec2d>(); d++){
-// 		(*d)[0] /= (*d)[1] != 0 ? (*d)[1] : 1;
-// 	}
-//
-// 	for (int i = 0; i < height; i++){
-// 		for (int j = 0; j < width; j++){
-// 			const double pi = (double)i / sigma_S;
-// 			const double pj = (double)j / sigma_S;
-// 			const double pz_b = (B.at<double>(i,j) - b_min) / sigma_R;
-// 			const double pz_g = (G.at<double>(i,j) - g_min) / sigma_R;
-// 			const double pz_r = (R.at<double>(i,j) - r_min) / sigma_R;
-//
-// 			tmp_B.at<double>(i,j) = trilinear_interpolation(grid_b, pi, pj, pz_b)[0];
-// 			tmp_G.at<double>(i,j) = trilinear_interpolation(grid_g, pi, pj, pz_g)[0];
-// 			tmp_R.at<double>(i,j) = trilinear_interpolation(grid_r, pi, pj, pz_r)[0];
-// 		}
-// 	}
-//
-// 	// Merge B, G, R channels into a color image
-// 	vector<Mat> BGR;
-//
-// 	BGR.push_back(tmp_B);
-// 	BGR.push_back(tmp_G);
-// 	BGR.push_back(tmp_R);
-//
-// 	merge(BGR, dst);
-// }
-//
-//
-// Vec2d trilinear_interpolation(const Mat mat, const double y, const double x, const double z){
-//     const int height = mat.size[0];
-//     const int width  = mat.size[1];
-//     const int depth  = mat.size[2];
-//
-//     const int y_idx  = clamp(0, height-1, (int)y);
-//     const int yy_idx = clamp(0, height-1, y_idx + 1);
-//     const int x_idx  = clamp(0, width-1, (int)x);
-//     const int xx_idx = clamp(0, width-1, x_idx + 1);
-//     const int z_idx  = clamp(0, depth-1, (int)z);
-//     const int zz_idx = clamp(0, depth-1, z_idx + 1);
-//
-// 	const double y_alpha = y - y_idx;
-//     const double x_alpha = x - x_idx;
-//     const double z_alpha = z - z_idx;
-//
-//     return  (1.0-y_alpha) * (1.0-x_alpha) * (1.0-z_alpha) * mat.at<Vec2d>(y_idx, x_idx, z_idx) 	 +
-//         	(1.0-y_alpha) * x_alpha       * (1.0-z_alpha) * mat.at<Vec2d>(y_idx, xx_idx, z_idx)  +
-//         	y_alpha       * (1.0-x_alpha) * (1.0-z_alpha) * mat.at<Vec2d>(yy_idx, x_idx, z_idx)  +
-//         	y_alpha       * x_alpha       * (1.0-z_alpha) * mat.at<Vec2d>(yy_idx, xx_idx, z_idx) +
-//         	(1.0-y_alpha) * (1.0-x_alpha) * z_alpha       * mat.at<Vec2d>(y_idx, x_idx, zz_idx)  +
-//         	(1.0-y_alpha) * x_alpha       * z_alpha       * mat.at<Vec2d>(y_idx, xx_idx, zz_idx) +
-//         	y_alpha       * (1.0-x_alpha) * z_alpha       * mat.at<Vec2d>(yy_idx, x_idx, zz_idx) +
-//         	y_alpha       * x_alpha       * z_alpha       * mat.at<Vec2d>(yy_idx, xx_idx, zz_idx);
-// }
-//
-//
-// int clamp(const int min, const int max, const int x){
-//     return ( x < min ) ? min : ( x < max ) ? x : max;
-// }
-//
-//
-// void type2str(int type){
-// 	string r;
-//
-// 	uchar depth = type & CV_MAT_DEPTH_MASK;
-// 	uchar chans = 1 + (type >> CV_CN_SHIFT);
-//
-// 	switch ( depth ) {
-// 		case CV_8U:  r = "8U"; break;
-// 		case CV_8S:  r = "8S"; break;
-// 		case CV_16U: r = "16U"; break;
-// 		case CV_16S: r = "16S"; break;
-// 		case CV_32S: r = "32S"; break;
-// 		case CV_32F: r = "32F"; break;
-// 		case CV_64F: r = "64F"; break;
-// 		default:     r = "User"; break;
-// 	}
-//
-// 	r += "C";
-// 	r += (chans+'0');
-//
-// 	std::cout << r << std::endl;
-// }
+
+Mat Fast_Bilateral_Filter(const Mat &src, const int filter_size, const double sigma_S, const double sigma_R){
+	Mat channels[3], _double_src;
+
+	src.convertTo(_double_src, CV_64FC3);
+	split(_double_src, channels);  // Split src into B, G, R channels with type CV_64FC1 each
+
+	Mat dst_tmp, dst;
+	dst_tmp.create(src.rows, src.cols, CV_64FC3);
+
+	_fast_bilateral_impl(channels[0], channels[1], channels[2], dst_tmp, filter_size, sigma_S, sigma_R);
+
+	dst.create(src.rows, src.cols, CV_64FC3);
+	dst_tmp.convertTo(dst, src.type());
+
+	return dst;
+}
+
+
+void _fast_bilateral_impl(const Mat &B, const Mat &G ,const Mat &R, Mat &dst, const int filter_size, const double sigma_S, const double sigma_R){
+	const int diameter = filter_size / 2;
+	int kernel[filter_size], tmp[filter_size], total;
+
+	for(int i = 0; i < filter_size; i++){
+		if (i < 2){
+			kernel[i] = 1;
+		} else {
+			for (int n = 0; n<=i; n++)
+				if (n == 0 || n == i) tmp[n] = 1;
+				else tmp[n] = kernel[n-1] + kernel[n];
+			for (int n = 0; n<=i; n++)
+				kernel[n] = tmp[n];
+		}
+	}
+
+	for(int i = 0; i < filter_size; i++)
+		total += kernel[i];
+
+	Mat tmp_B = Mat(B.size(), CV_64FC1);
+	Mat tmp_G = Mat(G.size(), CV_64FC1);
+	Mat tmp_R = Mat(R.size(), CV_64FC1);
+
+	double b_min, b_max;
+	double g_min, g_max;
+	double r_min, r_max;
+
+	minMaxLoc(B, &b_min, &b_max);
+	minMaxLoc(G, &g_min, &g_max);
+	minMaxLoc(R, &r_min, &r_max);
+
+	const int padding_xy = 2, padding_z = 2, height = B.rows, width = B.cols;
+	const int downsample_height = (int)floor((height - 1) / sigma_S) + 1 + 2 * padding_xy;
+	const int downsample_width = (int)floor((width - 1) / sigma_S) + 1 + 2 * padding_xy;
+	const int downsample_depth_b = (int)floor((b_max - b_min) / sigma_R) + 1 + 2 * padding_z;
+	const int downsample_depth_g = (int)floor((g_max - g_min) / sigma_R) + 1 + 2 * padding_z;
+	const int downsample_depth_r = (int)floor((r_max - r_min) / sigma_R) + 1 + 2 * padding_z;
+
+	cout << downsample_height << " " << downsample_width << " " << downsample_depth_b << " " << downsample_depth_g << " " << downsample_depth_r << endl;
+
+	int data_size_b[] = {downsample_height, downsample_width, downsample_depth_b};
+	int data_size_g[] = {downsample_height, downsample_width, downsample_depth_g};
+	int data_size_r[] = {downsample_height, downsample_width, downsample_depth_r};
+
+	Mat grid_b(3, data_size_b, CV_64FC2);  // (i, j, range) => 2 channels (wi, w)
+	Mat grid_g(3, data_size_g, CV_64FC2);
+	Mat grid_r(3, data_size_r, CV_64FC2);
+
+	grid_b.setTo(0);
+	grid_g.setTo(0);
+	grid_r.setTo(0);
+
+	// Step 1: Downsampling - Compute the grid location
+	for (int i = 0; i < height; i++){
+		for (int j = 0; j < width ; j++){
+			// Compute grid coordinate
+			const int di = (int)round((double)i / sigma_S);
+			const int dj = (int)round((double)j / sigma_S);
+            const int dz_b = (int)round((B.at<double>(i,j) - b_min) / sigma_R);
+			const int dz_g = (int)round((G.at<double>(i,j) - g_min) / sigma_R);
+			const int dz_r = (int)round((R.at<double>(i,j) - r_min) / sigma_R);
+
+			// Retrieve the grid value
+            Vec2d v_b = grid_b.at<Vec2d>(di, dj, dz_b);
+			Vec2d v_g = grid_g.at<Vec2d>(di, dj, dz_g);
+			Vec2d v_r = grid_r.at<Vec2d>(di, dj, dz_r);
+
+			// Updating the downsampled S x R space    => (w * i, w)
+            v_b[0] += B.at<double>(i,j);	v_b[1] += 1.0;
+			v_g[0] += G.at<double>(i,j);	v_g[1] += 1.0;
+			v_r[0] += R.at<double>(i,j);	v_r[1] += 1.0;
+
+			grid_b.at<Vec2d>(di, dj, dz_b) = v_b;
+			grid_g.at<Vec2d>(di, dj, dz_g) = v_g;
+			grid_r.at<Vec2d>(di, dj, dz_r) = v_r;
+		}
+	}
+
+	// Step 2: Convolution
+	Mat buffer_b(3, data_size_b, CV_64FC2);
+	Mat buffer_g(3, data_size_g, CV_64FC2);
+	Mat buffer_r(3, data_size_r, CV_64FC2);
+	buffer_b.setTo(0);
+	buffer_g.setTo(0);
+	buffer_r.setTo(0);
+
+	int offset[3];
+    offset[0] = &(grid_b.at<Vec2d>(1,0,0)) - &(grid_b.at<Vec2d>(0,0,0));
+    offset[1] = &(grid_b.at<Vec2d>(0,1,0)) - &(grid_b.at<Vec2d>(0,0,0));
+    offset[2] = &(grid_b.at<Vec2d>(0,0,1)) - &(grid_b.at<Vec2d>(0,0,0));
+
+	for (int d = 0; d < 3; d++){  	// For x, y, depth direction
+		for (int ittr = 0; ittr < 2; ittr++){
+			// SWAP:  Old_Value <=> New_Value
+			swap(grid_b, buffer_b);
+			swap(grid_g, buffer_g);
+			swap(grid_r, buffer_r);
+
+			for (int i = 0; i < downsample_height - 0; i++){
+				for (int j = 0; j < downsample_width - 0; j++){
+					Vec2d *grid_ptr_b = &(grid_b.at<Vec2d>(i,j,diameter));
+					Vec2d *grid_ptr_g = &(grid_g.at<Vec2d>(i,j,diameter));
+					Vec2d *grid_ptr_r = &(grid_r.at<Vec2d>(i,j,diameter));
+
+	                Vec2d *buffer_ptr_b = &(buffer_b.at<Vec2d>(i,j,diameter));
+					Vec2d *buffer_ptr_g = &(buffer_g.at<Vec2d>(i,j,diameter));
+					Vec2d *buffer_ptr_r = &(buffer_r.at<Vec2d>(i,j,diameter));
+
+					for (int z = diameter; z < downsample_depth_b - diameter ; z++, buffer_ptr_b++, grid_ptr_b++){
+						for (int h = -diameter; h < -diameter + filter_size; h++)
+							*grid_ptr_b += *(buffer_ptr_b + h * offset[d]) * kernel[h + diameter];
+						*grid_ptr_b /= total;
+					}
+
+					for (int z = diameter; z < downsample_depth_g - diameter; z++, buffer_ptr_g++, grid_ptr_g++){
+						for (int h = -diameter; h < -diameter + filter_size; h++)
+							*grid_ptr_g += *(buffer_ptr_g + h * offset[d]) * kernel[h + diameter];
+						*grid_ptr_g /= total;
+					}
+
+					for (int z = diameter; z < downsample_depth_r - diameter ; z++, buffer_ptr_r++, grid_ptr_r++){
+						for (int h = -diameter; h < -diameter + filter_size; h++)
+							*grid_ptr_r += *(buffer_ptr_r + h * offset[d]) * kernel[h + diameter];
+						*grid_ptr_r /= total;
+					}
+				}
+			}
+
+		}
+		// buffer_b.setTo(0);
+		// buffer_g.setTo(0);
+		// buffer_r.setTo(0);
+	}
+
+	// Step 3: Upsampling
+	for ( MatIterator_<Vec2d> d = grid_b.begin<Vec2d>(); d != grid_b.end<Vec2d>(); d++){
+		(*d)[0] /= (*d)[1] != 0 ? (*d)[1] : 1;
+	}
+
+	for ( MatIterator_<Vec2d> d = grid_g.begin<Vec2d>(); d != grid_g.end<Vec2d>(); d++){
+		(*d)[0] /= (*d)[1] != 0 ? (*d)[1] : 1;
+	}
+
+	for ( MatIterator_<Vec2d> d = grid_r.begin<Vec2d>(); d != grid_r.end<Vec2d>(); d++){
+		(*d)[0] /= (*d)[1] != 0 ? (*d)[1] : 1;
+	}
+
+	for (int i = 0; i < height; i++){
+		for (int j = 0; j < width; j++){
+			const double pi = (double)i / sigma_S;
+			const double pj = (double)j / sigma_S;
+			const double pz_b = (B.at<double>(i,j) - b_min) / sigma_R;
+			const double pz_g = (G.at<double>(i,j) - g_min) / sigma_R;
+			const double pz_r = (R.at<double>(i,j) - r_min) / sigma_R;
+
+			tmp_B.at<double>(i,j) = trilinear_interpolation(grid_b, pi, pj, pz_b)[0];
+			tmp_G.at<double>(i,j) = trilinear_interpolation(grid_g, pi, pj, pz_g)[0];
+			tmp_R.at<double>(i,j) = trilinear_interpolation(grid_r, pi, pj, pz_r)[0];
+		}
+	}
+
+	// Merge B, G, R channels into a color image
+	vector<Mat> BGR;
+
+	BGR.push_back(tmp_B);
+	BGR.push_back(tmp_G);
+	BGR.push_back(tmp_R);
+
+	merge(BGR, dst);
+}
+
+
+Vec2d trilinear_interpolation(const Mat mat, const double y, const double x, const double z){
+    const int height = mat.size[0];
+    const int width  = mat.size[1];
+    const int depth  = mat.size[2];
+
+    const int y_idx  = clamp(0, height-1, (int)y);
+    const int yy_idx = clamp(0, height-1, y_idx + 1);
+    const int x_idx  = clamp(0, width-1, (int)x);
+    const int xx_idx = clamp(0, width-1, x_idx + 1);
+    const int z_idx  = clamp(0, depth-1, (int)z);
+    const int zz_idx = clamp(0, depth-1, z_idx + 1);
+
+	const double y_alpha = y - y_idx;
+    const double x_alpha = x - x_idx;
+    const double z_alpha = z - z_idx;
+
+    return  (1.0-y_alpha) * (1.0-x_alpha) * (1.0-z_alpha) * mat.at<Vec2d>(y_idx, x_idx, z_idx) 	 +
+        	(1.0-y_alpha) * x_alpha       * (1.0-z_alpha) * mat.at<Vec2d>(y_idx, xx_idx, z_idx)  +
+        	y_alpha       * (1.0-x_alpha) * (1.0-z_alpha) * mat.at<Vec2d>(yy_idx, x_idx, z_idx)  +
+        	y_alpha       * x_alpha       * (1.0-z_alpha) * mat.at<Vec2d>(yy_idx, xx_idx, z_idx) +
+        	(1.0-y_alpha) * (1.0-x_alpha) * z_alpha       * mat.at<Vec2d>(y_idx, x_idx, zz_idx)  +
+        	(1.0-y_alpha) * x_alpha       * z_alpha       * mat.at<Vec2d>(y_idx, xx_idx, zz_idx) +
+        	y_alpha       * (1.0-x_alpha) * z_alpha       * mat.at<Vec2d>(yy_idx, x_idx, zz_idx) +
+        	y_alpha       * x_alpha       * z_alpha       * mat.at<Vec2d>(yy_idx, xx_idx, zz_idx);
+}
+
+
+int clamp(const int min, const int max, const int x){
+    return ( x < min ) ? min : ( x < max ) ? x : max;
+}
+
+
+void type2str(int type){
+	string r;
+
+	uchar depth = type & CV_MAT_DEPTH_MASK;
+	uchar chans = 1 + (type >> CV_CN_SHIFT);
+
+	switch ( depth ) {
+		case CV_8U:  r = "8U"; break;
+		case CV_8S:  r = "8S"; break;
+		case CV_16U: r = "16U"; break;
+		case CV_16S: r = "16S"; break;
+		case CV_32S: r = "32S"; break;
+		case CV_32F: r = "32F"; break;
+		case CV_64F: r = "64F"; break;
+		default:     r = "User"; break;
+	}
+
+	r += "C";
+	r += (chans+'0');
+
+	std::cout << r << std::endl;
+}
